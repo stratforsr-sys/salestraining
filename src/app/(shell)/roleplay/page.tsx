@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { RoleplaySetupClient } from "@/components/roleplay/roleplay-setup-client";
 

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getUserMeetings } from "@/actions/meetings";
 import { MeetingsClient } from "@/components/meetings/meetings-client";
 

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getModulesWithProgress } from "@/actions/modules";
 import { ModulesClient } from "@/components/modules/modules-client";
 

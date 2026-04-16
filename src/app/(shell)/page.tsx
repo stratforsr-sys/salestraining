@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { getDueRepetitions, getWeakestTechniques } from "@/lib/knowledge-base";
 import { getDashboardStats } from "@/actions/gamification";
