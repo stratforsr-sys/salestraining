@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { TopNav } from "@/components/nav/top-nav";
 
 export default function ShellLayout({
