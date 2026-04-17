@@ -329,7 +329,13 @@ export async function analyzeMeetingTranscript(
   meetingType: string,
   knowledgeBase: string
 ): Promise<MeetingAnalysisResult> {
-  const model = getModel();
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.4,
+    },
+  });
 
   const prompt = `Du ar en saljcoach som analyserar riktiga moten mot en kunskapsbas av saljtekniker.
 
@@ -394,10 +400,51 @@ VIKTIGT:
   const result = await model.generateContent(prompt);
   const text = result.response.text();
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI returned invalid JSON");
+  const parsed = safeParseJson<Partial<MeetingAnalysisResult>>(text);
+  if (!parsed) {
+    console.error("[analyzeMeetingTranscript] Failed to parse AI response. Raw text:", text.slice(0, 2000));
+    throw new Error("AI returned invalid JSON för mötestranskript-analys");
+  }
 
-  return JSON.parse(jsonMatch[0]) as MeetingAnalysisResult;
+  return {
+    summary: parsed.summary ?? "",
+    talkRatio: typeof parsed.talkRatio === "number" ? parsed.talkRatio : 0,
+    questionsAsked: typeof parsed.questionsAsked === "number" ? parsed.questionsAsked : 0,
+    longestMonologue: parsed.longestMonologue ?? "0",
+    techniqueHits: Array.isArray(parsed.techniqueHits) ? parsed.techniqueHits : [],
+    techniqueMisses: Array.isArray(parsed.techniqueMisses) ? parsed.techniqueMisses : [],
+    bbbtuuiccCoverage:
+      parsed.bbbtuuiccCoverage && typeof parsed.bbbtuuiccCoverage === "object"
+        ? parsed.bbbtuuiccCoverage
+        : {},
+    generatedExercises: Array.isArray(parsed.generatedExercises) ? parsed.generatedExercises : [],
+  };
+}
+
+function safeParseJson<T>(text: string): T | null {
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    // Fall through to regex extraction
+  }
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenced) {
+    try {
+      return JSON.parse(fenced[1]) as T;
+    } catch {
+      // Fall through
+    }
+  }
+  const match = trimmed.match(/\{[\s\S]*\}/);
+  if (match) {
+    try {
+      return JSON.parse(match[0]) as T;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // ============================================================
