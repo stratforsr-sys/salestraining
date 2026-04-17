@@ -251,6 +251,7 @@ model RealMeetingAnalysis {
   longestMonologue Int? // seconds
   techniqueHits   String? // JSON: techniques successfully used
   techniqueMisses String? // JSON: missed opportunities
+  bbbtuuiccCoverage String? // JSON: { behov, budget, beslutsfattare, ... }
 
   feedbackItems   MeetingFeedbackItem[]
   generatedExercises GeneratedExercise[]

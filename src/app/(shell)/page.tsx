@@ -2,18 +2,19 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/prisma";
 import { getDueRepetitions, getWeakestTechniques } from "@/lib/knowledge-base";
-import { getDashboardStats } from "@/actions/gamification";
+import { getDashboardStats, getStreakStatus } from "@/actions/gamification";
 import { DashboardClient } from "@/components/dashboard/dashboard-client";
-
-const USER_ID = "default-user";
+import { getSession } from "@/lib/session";
 
 export default async function DashboardPage() {
-  const [stats, dueReps, weakTechniques, modules] = await Promise.all([
-    getDashboardStats(USER_ID),
-    getDueRepetitions(USER_ID),
-    getWeakestTechniques(USER_ID, 5),
+  const { userId } = await getSession();
+
+  const [stats, dueReps, weakTechniques, modules, streakStatus] = await Promise.all([
+    getDashboardStats(userId),
+    getDueRepetitions(userId),
+    getWeakestTechniques(userId, 5),
     prisma.module.findMany({
-      where: { userId: USER_ID },
+      where: { userId },
       include: {
         techniques: {
           include: { skillProgress: true },
@@ -22,6 +23,7 @@ export default async function DashboardPage() {
       },
       orderBy: { order: "asc" },
     }),
+    getStreakStatus(userId),
   ]);
 
   return (
@@ -29,7 +31,9 @@ export default async function DashboardPage() {
       stats={stats}
       dueReps={dueReps}
       weakTechniques={weakTechniques}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       modules={modules as any}
+      streakStatus={streakStatus}
     />
   );
 }

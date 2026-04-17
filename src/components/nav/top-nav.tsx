@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CommandPalette } from "./command-palette";
+import { logoutAction } from "@/actions/auth";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/", icon: GridIcon },
@@ -13,9 +14,22 @@ const NAV_ITEMS = [
   { label: "Möten", href: "/meetings", icon: MicIcon },
 ] as const;
 
-export function TopNav() {
+export function TopNav({ userName, totalXp }: { userName: string; totalXp: number }) {
   const pathname = usePathname();
   const [cmdOpen, setCmdOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    if (menuOpen) document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
+
+  const avatarInitial = (userName || "?").trim().charAt(0).toUpperCase();
+  const formattedXp = totalXp.toLocaleString("sv-SE");
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -123,20 +137,80 @@ export function TopNav() {
             }}
           >
             <FlameIcon size={14} />
-            <span>0 XP</span>
+            <span>{formattedXp} XP</span>
           </div>
 
-          {/* Avatar */}
-          <div
-            className="w-8 h-8 flex items-center justify-center text-xs font-medium"
-            style={{
-              background: "var(--bg-elevated)",
-              borderRadius: "var(--radius-full)",
-              border: "1px solid var(--border-default)",
-              color: "var(--text-secondary)",
-            }}
-          >
-            S
+          {/* Avatar + menu */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              aria-label="Profilmeny"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              className="w-8 h-8 flex items-center justify-center text-xs font-medium transition-colors"
+              style={{
+                background: menuOpen ? "var(--accent-muted)" : "var(--bg-elevated)",
+                borderRadius: "var(--radius-full)",
+                border: `1px solid ${menuOpen ? "var(--border-accent)" : "var(--border-default)"}`,
+                color: menuOpen ? "var(--accent)" : "var(--text-secondary)",
+              }}
+            >
+              {avatarInitial}
+            </button>
+
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 mt-[var(--space-2)] w-56 py-[var(--space-2)] z-50"
+                style={{
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--border-default)",
+                  borderRadius: "var(--radius-md)",
+                  boxShadow: "var(--shadow-overlay, 0 8px 24px rgba(0,0,0,0.4))",
+                }}
+              >
+                <div
+                  className="px-[var(--space-4)] py-[var(--space-2)] border-b mb-[var(--space-2)]"
+                  style={{ borderColor: "var(--border-subtle)" }}
+                >
+                  <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                    Inloggad som
+                  </div>
+                  <div className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                    {userName}
+                  </div>
+                </div>
+                {[
+                  { href: "/skill-tree", label: "Skill Tree" },
+                  { href: "/reflections", label: "Reflektioner" },
+                  { href: "/achievements", label: "Prestationer" },
+                  { href: "/settings", label: "Inställningar" },
+                ].map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full text-left px-[var(--space-4)] py-[var(--space-2)] text-sm transition-colors hover:opacity-80"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                <div
+                  className="my-[var(--space-2)]"
+                  style={{ borderTop: "1px solid var(--border-subtle)" }}
+                />
+                <form action={logoutAction}>
+                  <button
+                    type="submit"
+                    className="w-full text-left px-[var(--space-4)] py-[var(--space-2)] text-sm transition-colors hover:opacity-80"
+                    style={{ color: "var(--text-secondary)" }}
+                  >
+                    Logga ut
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       </nav>

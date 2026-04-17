@@ -2,10 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { getUserMeetings } from "@/actions/meetings";
 import { MeetingsClient } from "@/components/meetings/meetings-client";
-
-const USER_ID = "default-user";
+import { getSession } from "@/lib/session";
 
 export default async function MeetingsPage() {
-  const meetings = await getUserMeetings(USER_ID);
+  const { userId } = await getSession();
+  const meetings = await getUserMeetings(userId);
   return <MeetingsClient meetings={meetings} />;
 }

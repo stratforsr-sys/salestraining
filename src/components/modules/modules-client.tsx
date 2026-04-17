@@ -42,20 +42,37 @@ export function ModulesClient({ modules }: { modules: ModuleSummary[] }) {
             {modules.length} moduler · {modules.reduce((s, m) => s + m.techniqueCount, 0)} tekniker
           </p>
         </div>
-        <Link
-          href="/modules/new"
-          className="flex items-center gap-[var(--space-2)] px-[var(--space-4)] py-[var(--space-2)] text-sm font-medium transition-all"
-          style={{
-            background: "var(--accent)",
-            color: "var(--text-inverse)",
-            borderRadius: "var(--radius-md)",
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M6 2v8M2 6h8" />
-          </svg>
-          Ny modul
-        </Link>
+        <div className="flex items-center gap-[var(--space-2)]">
+          <Link
+            href="/skill-tree"
+            className="flex items-center gap-[var(--space-2)] px-[var(--space-4)] py-[var(--space-2)] text-sm font-medium transition-all"
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-secondary)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M8 14V3M8 3l-3 3M8 3l3 3M8 9l-4 2M8 9l4 2" />
+            </svg>
+            Skill Tree
+          </Link>
+          <Link
+            href="/modules/new"
+            className="flex items-center gap-[var(--space-2)] px-[var(--space-4)] py-[var(--space-2)] text-sm font-medium transition-all"
+            style={{
+              background: "var(--accent)",
+              color: "var(--text-inverse)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 2v8M2 6h8" />
+            </svg>
+            Ny modul
+          </Link>
+        </div>
       </div>
 
       {/* Module Grid */}

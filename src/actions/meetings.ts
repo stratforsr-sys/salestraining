@@ -4,16 +4,18 @@ import { prisma } from "@/lib/prisma";
 import { analyzeMeetingTranscript } from "@/lib/gemini";
 import { buildKnowledgeBase } from "@/lib/knowledge-base";
 import { getXpReward } from "@/lib/spaced-repetition";
+import { getSession } from "@/lib/session";
+import { checkAchievements } from "@/actions/gamification";
 
 // ============================================================
 // ANALYZE REAL MEETING TRANSCRIPT
 // ============================================================
 export async function analyzeRealMeeting(
-  userId: string,
   meetingType: string,
   transcript: string,
   date?: Date
 ) {
+  const { userId } = await getSession();
   const knowledgeBase = await buildKnowledgeBase(userId);
 
   // Analyze with Gemini
@@ -32,6 +34,7 @@ export async function analyzeRealMeeting(
       longestMonologue: parseInt(analysis.longestMonologue) || null,
       techniqueHits: JSON.stringify(analysis.techniqueHits),
       techniqueMisses: JSON.stringify(analysis.techniqueMisses),
+      bbbtuuiccCoverage: JSON.stringify(analysis.bbbtuuiccCoverage),
     },
   });
 
@@ -86,6 +89,8 @@ export async function analyzeRealMeeting(
     create: { userId, date: today, xpEarned: xp },
   });
 
+  const newAchievements = await checkAchievements(userId);
+
   return {
     id: meeting.id,
     meetingId: meeting.id,
@@ -97,6 +102,7 @@ export async function analyzeRealMeeting(
     exercisesGenerated: analysis.generatedExercises.length,
     bbbtuuiccCoverage: analysis.bbbtuuiccCoverage,
     xpEarned: xp,
+    newAchievements,
   };
 }
 

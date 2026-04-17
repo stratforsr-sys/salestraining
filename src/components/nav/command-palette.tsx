@@ -32,6 +32,10 @@ export function CommandPalette({
     { id: "nav-practice", label: "Öva", description: "Starta övningssession", icon: "target", action: () => router.push("/practice"), section: "Navigation" },
     { id: "nav-roleplay", label: "Rollspel", description: "AI-köpare", icon: "users", action: () => router.push("/roleplay"), section: "Navigation" },
     { id: "nav-meetings", label: "Mötesanalys", description: "Analysera riktiga möten", icon: "mic", action: () => router.push("/meetings"), section: "Navigation" },
+    { id: "nav-skill-tree", label: "Skill Tree", description: "Visuell karta över tekniker", icon: "tree", action: () => router.push("/skill-tree"), section: "Navigation" },
+    { id: "nav-reflections", label: "Reflektioner", description: "Dina reflektioner", icon: "book", action: () => router.push("/reflections"), section: "Navigation" },
+    { id: "nav-achievements", label: "Prestationer", description: "Upplåsta achievements", icon: "target", action: () => router.push("/achievements"), section: "Navigation" },
+    { id: "nav-settings", label: "Inställningar", description: "Mål och repetitionsschema", icon: "settings", action: () => router.push("/settings"), section: "Navigation" },
     // Actions
     { id: "act-new-module", label: "Ny modul", description: "Ladda upp anteckningar", icon: "plus", action: () => router.push("/modules/new"), section: "Åtgärder" },
     { id: "act-quick-practice", label: "Snabbövning", description: "Öva svagaste tekniker", icon: "zap", action: () => router.push("/practice?mode=quick"), section: "Åtgärder" },
@@ -271,6 +275,22 @@ function CmdIcon({ type, active }: { type: string; active: boolean }) {
       return (
         <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5">
           <path d="M8 10V3M5 5l3-3 3 3M3 13h10" />
+        </svg>
+      );
+    case "tree":
+      return (
+        <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5">
+          <path d="M8 14V3M8 3l-3 3M8 3l3 3M8 9l-4 2M8 9l4 2" />
+          <circle cx="8" cy="3" r="1.5" fill={color} />
+          <circle cx="4" cy="11" r="1" fill={color} opacity="0.6" />
+          <circle cx="12" cy="11" r="1" fill={color} opacity="0.6" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5">
+          <circle cx="8" cy="8" r="2.5" />
+          <path d="M13 8a5 5 0 00-.1-1l1-.8-1-1.7-1.2.4a5 5 0 00-1.7-1l-.2-1.2H7.2L7 3.9a5 5 0 00-1.7 1l-1.2-.4-1 1.7 1 .8a5 5 0 000 2l-1 .8 1 1.7 1.2-.4a5 5 0 001.7 1l.2 1.2h1.6l.2-1.2a5 5 0 001.7-1l1.2.4 1-1.7-1-.8c.1-.3.1-.7.1-1z" />
         </svg>
       );
     default:

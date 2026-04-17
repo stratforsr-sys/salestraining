@@ -6,8 +6,6 @@ import { motion } from "framer-motion";
 import { startPracticeSession } from "@/actions/practice";
 import { startRoleplay } from "@/actions/roleplay";
 
-const USER_ID = "default-user";
-
 interface Persona {
   id: string;
   name: string;
@@ -30,7 +28,7 @@ export function RoleplaySetupClient({ personas }: { personas: Persona[] }) {
     setLoading(true);
 
     try {
-      const session = await startPracticeSession(USER_ID, "roleplay");
+      const session = await startPracticeSession("roleplay");
       const roleplay = await startRoleplay(session.id, selectedPersona, meetingType, difficulty);
       router.push(`/roleplay/${roleplay.id}`);
     } catch {

@@ -1,9 +1,10 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { roleplayResponse, evaluateResponse, type ConversationMessage, type TechniqueContext, type PersonaContext } from "@/lib/gemini";
+import { roleplayResponse, evaluateRoleplayFull, type ConversationMessage, type TechniqueContext, type PersonaContext } from "@/lib/gemini";
 import { buildKnowledgeBase } from "@/lib/knowledge-base";
 import { getXpReward } from "@/lib/spaced-repetition";
+import { checkAchievements } from "@/actions/gamification";
 
 // ============================================================
 // START ROLEPLAY
@@ -169,8 +170,7 @@ export async function endRoleplay(roleplayId: string) {
   const transcript: ConversationMessage[] = JSON.parse(roleplay.transcript);
   const knowledgeBase = await buildKnowledgeBase(roleplay.session.userId);
 
-  // Get focus technique context if set
-  let focusTechContext: TechniqueContext | undefined;
+  let focusTechContext: TechniqueContext | null = null;
   if (roleplay.focusTechnique) {
     const tech = await prisma.technique.findUnique({
       where: { id: roleplay.focusTechnique },
@@ -185,21 +185,27 @@ export async function endRoleplay(roleplayId: string) {
     }
   }
 
-  // Build transcript text for evaluation
-  const transcriptText = transcript
-    .map(m => `${m.role === "seller" ? "Saljare" : "Kopare"} (${m.timestamp}s): ${m.content}`)
-    .join("\n");
+  const personaCtx: PersonaContext = {
+    name: roleplay.persona.name,
+    title: roleplay.persona.title,
+    company: roleplay.persona.company,
+    industry: roleplay.persona.industry,
+    companySize: roleplay.persona.companySize,
+    personality: roleplay.persona.personality,
+    currentSolution: roleplay.persona.currentSolution || undefined,
+    painPoints: roleplay.persona.painPoints || undefined,
+    objections: roleplay.persona.objections || undefined,
+  };
 
-  // Use evaluateResponse for scoring
-  const evaluation = await evaluateResponse(
-    `Rollspel med ${roleplay.persona.name}, ${roleplay.persona.title}. Motestyp: ${roleplay.meetingType}. Svarighetsgrad: ${roleplay.difficulty}.`,
-    transcriptText,
-    focusTechContext || { name: "Allmant", description: "Allmant saljsamtal", whenToUse: "Alla moten", howToUse: "Anvand alla tekniker" },
-    knowledgeBase,
-    roleplay.difficulty
+  const evaluation = await evaluateRoleplayFull(
+    transcript,
+    personaCtx,
+    roleplay.meetingType,
+    roleplay.difficulty,
+    focusTechContext,
+    knowledgeBase
   );
 
-  // Create scorecard
   await prisma.scorecard.create({
     data: {
       roleplayId,
@@ -209,11 +215,36 @@ export async function endRoleplay(roleplayId: string) {
       meetingStructure: evaluation.breakdown.meetingStructure.score,
       naturalFormulation: evaluation.breakdown.naturalFormulation.score,
       totalScore: evaluation.score,
-      detailedFeedback: JSON.stringify(evaluation),
+      detailedFeedback: JSON.stringify({
+        strengths: evaluation.strengths,
+        improvements: evaluation.improvements,
+        feedForward: evaluation.feedForward,
+        breakdownComments: {
+          rightTechnique: evaluation.breakdown.rightTechnique.comment,
+          frameworkCoverage: evaluation.breakdown.frameworkCoverage.comment,
+          objectionHandling: evaluation.breakdown.objectionHandling.comment,
+          meetingStructure: evaluation.breakdown.meetingStructure.comment,
+          naturalFormulation: evaluation.breakdown.naturalFormulation.comment,
+        },
+      }),
     },
   });
 
-  // Update XP and skill progress
+  if (evaluation.timestampedFeedback?.length) {
+    await prisma.timestampedFeedback.createMany({
+      data: evaluation.timestampedFeedback.map((item) => ({
+        roleplayId,
+        timestamp: Math.max(0, Math.round(item.timestamp || 0)),
+        type: item.type,
+        buyerSaid: item.buyerSaid || "",
+        userSaid: item.userSaid || "",
+        techniqueName: item.techniqueName || "",
+        idealResponse: item.idealResponse || "",
+        explanation: item.explanation || "",
+      })),
+    });
+  }
+
   const xp = getXpReward("roleplay", evaluation.score);
 
   await prisma.practiceSession.update({
@@ -221,7 +252,6 @@ export async function endRoleplay(roleplayId: string) {
     data: { totalXp: { increment: xp } },
   });
 
-  // Update daily streak
   const userId = roleplay.session.userId;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -232,5 +262,13 @@ export async function endRoleplay(roleplayId: string) {
     create: { userId, date: today, xpEarned: xp },
   });
 
-  return { evaluation, xpEarned: xp, transcript };
+  const newAchievements = await checkAchievements(userId);
+
+  return {
+    evaluation,
+    xpEarned: xp,
+    transcript,
+    newAchievements,
+    timestampedFeedback: evaluation.timestampedFeedback || [],
+  };
 }

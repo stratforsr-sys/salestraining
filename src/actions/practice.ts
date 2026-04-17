@@ -10,14 +10,14 @@ import {
   calculateLevel,
   getXpReward,
 } from "@/lib/spaced-repetition";
+import { getSession } from "@/lib/session";
+import { checkAchievements } from "@/actions/gamification";
 
 // ============================================================
 // START PRACTICE SESSION
 // ============================================================
-export async function startPracticeSession(
-  userId: string,
-  sessionType: string = "mixed"
-) {
+export async function startPracticeSession(sessionType: string = "mixed") {
+  const { userId } = await getSession();
   const session = await prisma.practiceSession.create({
     data: {
       userId,
@@ -33,10 +33,10 @@ export async function startPracticeSession(
 // GENERATE SCENARIO CARD
 // ============================================================
 export async function generateScenarioCard(
-  userId: string,
   techniqueId?: string,
   difficulty: string = "medium"
 ) {
+  const { userId } = await getSession();
   let technique;
 
   if (techniqueId) {
@@ -84,13 +84,13 @@ export async function generateScenarioCard(
 // SUBMIT SCENARIO ANSWER
 // ============================================================
 export async function submitScenarioAnswer(
-  userId: string,
   sessionId: string,
   techniqueId: string,
   scenario: string,
   userResponse: string,
   difficulty: string
 ) {
+  const { userId } = await getSession();
   const technique = await prisma.technique.findUnique({
     where: { id: techniqueId },
   });
@@ -154,13 +154,13 @@ export async function submitScenarioAnswer(
 // SUBMIT RECALL TEST
 // ============================================================
 export async function submitRecallTest(
-  userId: string,
   sessionId: string,
   techniqueId: string,
   prompt: string,
   userResponse: string,
   selfRating: "easy" | "medium" | "hard"
 ) {
+  const { userId } = await getSession();
   const qualityMap = { easy: 5, medium: 3, hard: 1 } as const;
   const quality = qualityMap[selfRating];
   const score = selfRating === "easy" ? 90 : selfRating === "medium" ? 60 : 30;
@@ -226,10 +226,21 @@ export async function submitRecallTest(
 // COMPLETE SESSION
 // ============================================================
 export async function completeSession(sessionId: string, durationSeconds: number) {
-  return prisma.practiceSession.update({
+  const session = await prisma.practiceSession.update({
     where: { id: sessionId },
     data: { duration: durationSeconds },
   });
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  await prisma.dailyStreak.upsert({
+    where: { userId_date: { userId: session.userId, date: today } },
+    update: { minutesSpent: { increment: Math.round(durationSeconds / 60) } },
+    create: { userId: session.userId, date: today, minutesSpent: Math.round(durationSeconds / 60) },
+  });
+
+  const newAchievements = await checkAchievements(session.userId);
+  return { session, newAchievements };
 }
 
 // ============================================================

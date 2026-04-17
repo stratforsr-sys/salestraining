@@ -246,6 +246,82 @@ REGLER:
 }
 
 // ============================================================
+// ROLEPLAY FULL EVALUATION — Overall + timestamped breakdown
+// ============================================================
+export async function evaluateRoleplayFull(
+  transcript: ConversationMessage[],
+  persona: PersonaContext,
+  meetingType: string,
+  difficulty: string,
+  focusTechnique: TechniqueContext | null,
+  knowledgeBase: string
+): Promise<RoleplayEvaluationResult> {
+  const model = getModel();
+
+  const transcriptText = transcript
+    .map(m => `[${m.timestamp ?? 0}s] ${m.role === "seller" ? "Saljare" : "Kopare"}: ${m.content}`)
+    .join("\n");
+
+  const focusBlock = focusTechnique
+    ? `FOKUSTEKNIK: ${focusTechnique.name}\n${focusTechnique.description}\nNar: ${focusTechnique.whenToUse}\nHur: ${focusTechnique.howToUse}`
+    : "";
+
+  const prompt = `Du ar en saljcoach som utvardevar ett rollspel. Analysera samtalet holistiskt + peka pa specifika ogonblick.
+
+PERSONA: ${persona.name}, ${persona.title} pa ${persona.company}
+MOTESTYP: ${meetingType}
+SVARIGHETSGRAD: ${difficulty}
+${focusBlock}
+
+KUNSKAPSBAS:
+${knowledgeBase}
+
+TRANSKRIPT:
+${transcriptText}
+
+Svara i JSON:
+{
+  "score": 0-100,
+  "breakdown": {
+    "rightTechnique": { "score": 0-25, "comment": "Forklaring" },
+    "frameworkCoverage": { "score": 0-25, "comment": "Forklaring" },
+    "objectionHandling": { "score": 0-20, "comment": "Forklaring" },
+    "naturalFormulation": { "score": 0-15, "comment": "Forklaring" },
+    "meetingStructure": { "score": 0-15, "comment": "Forklaring" }
+  },
+  "strengths": ["Vad var bra"],
+  "improvements": ["Vad kan forbattras"],
+  "feedForward": "Nasta gang, prova att ...",
+  "levelIndicator": "beginner|advanced|competent|skilled|expert",
+  "timestampedFeedback": [
+    {
+      "timestamp": sekunder_in_i_samtalet,
+      "type": "positive|missed_opportunity|correction",
+      "buyerSaid": "Vad koparen sa i det ogonblicket",
+      "userSaid": "Vad saljaren svarade",
+      "techniqueName": "Relevant teknik fran kunskapsbasen",
+      "idealResponse": "Vad en ideal respons hade varit",
+      "explanation": "Varfor, med referens till kunskapsbasen"
+    }
+  ]
+}
+
+VIKTIGT:
+- Ge minst 3-6 timestamped-items (mix av positive + missed + correction)
+- Timestamp ska matcha de faktiska timestamps i transkriptet
+- Referera tekniker vid namn fran kunskapsbasen
+- Svara ENDAST med JSON`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  const jsonMatch = text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) throw new Error("AI returned invalid JSON");
+
+  return JSON.parse(jsonMatch[0]) as RoleplayEvaluationResult;
+}
+
+// ============================================================
 // MEETING TRANSCRIPT ANALYSIS
 // ============================================================
 export async function analyzeMeetingTranscript(
@@ -388,6 +464,30 @@ export interface EvaluationResult {
   improvements: string[];
   feedForward: string;
   levelIndicator: string;
+}
+
+export interface RoleplayEvaluationResult {
+  score: number;
+  breakdown: {
+    rightTechnique: { score: number; comment: string };
+    frameworkCoverage: { score: number; comment: string };
+    objectionHandling: { score: number; comment: string };
+    naturalFormulation: { score: number; comment: string };
+    meetingStructure: { score: number; comment: string };
+  };
+  strengths: string[];
+  improvements: string[];
+  feedForward: string;
+  levelIndicator: string;
+  timestampedFeedback: {
+    timestamp: number;
+    type: "positive" | "missed_opportunity" | "correction";
+    buyerSaid: string;
+    userSaid: string;
+    techniqueName: string;
+    idealResponse: string;
+    explanation: string;
+  }[];
 }
 
 export interface MeetingAnalysisResult {

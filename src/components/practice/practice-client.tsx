@@ -6,8 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { startPracticeSession, generateScenarioCard, submitScenarioAnswer } from "@/actions/practice";
 import { LevelBadge } from "@/components/gamification/level-badge";
 
-const USER_ID = "default-user";
-
 type Phase = "setup" | "scenario" | "answering" | "feedback" | "complete";
 
 interface Scenario {
@@ -46,7 +44,7 @@ export function PracticeClient() {
   const startSession = useCallback(async () => {
     setLoading(true);
     try {
-      const session = await startPracticeSession(USER_ID, "scenario");
+      const session = await startPracticeSession("scenario");
       setSessionId(session.id);
       await loadNextScenario(session.id);
     } catch {
@@ -62,7 +60,7 @@ export function PracticeClient() {
     setShowDetails(false);
 
     try {
-      const result = await generateScenarioCard(USER_ID, techniqueId || undefined, difficulty);
+      const result = await generateScenarioCard(techniqueId || undefined, difficulty);
       setScenario(result.scenario);
       setTechniqueId(result.techniqueId);
       setPhase("scenario");
@@ -79,7 +77,6 @@ export function PracticeClient() {
 
     try {
       const result = await submitScenarioAnswer(
-        USER_ID,
         sessionId,
         techniqueId,
         JSON.stringify(scenario),

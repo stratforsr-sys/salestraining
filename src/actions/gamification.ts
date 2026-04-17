@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { ACHIEVEMENTS, isUnlockedByStats } from "@/lib/achievements";
 
 // ============================================================
 // GET DASHBOARD STATS
@@ -77,6 +78,80 @@ export async function getDashboardStats(userId: string) {
 }
 
 // ============================================================
+// GET STREAK STATUS — used by dashboard reminder banner
+// ============================================================
+export interface StreakStatus {
+  currentStreak: number;
+  longestStreak: number;
+  practicedToday: boolean;
+  practicedYesterday: boolean;
+  daysSinceLastPractice: number | null;
+  preferredTime: string;
+  minutesToday: number;
+  dailyGoalMinutes: number;
+  goalMet: boolean;
+}
+
+export async function getStreakStatus(userId: string): Promise<StreakStatus> {
+  const streaks = await prisma.dailyStreak.findMany({
+    where: { userId },
+    orderBy: { date: "desc" },
+    take: 90,
+  });
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const streakData = streaks as any[];
+  const dates = streakData.map((s) => s.date as Date);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayMs = yesterday.getTime();
+
+  const normalized = dates
+    .map((d) => {
+      const x = new Date(d);
+      x.setHours(0, 0, 0, 0);
+      return x.getTime();
+    })
+    .sort((a, b) => b - a);
+
+  const unique = [...new Set(normalized)];
+  const practicedToday = unique.includes(todayMs);
+  const practicedYesterday = unique.includes(yesterdayMs);
+
+  const daysSinceLastPractice =
+    unique.length > 0
+      ? Math.round((todayMs - unique[0]) / (24 * 60 * 60 * 1000))
+      : null;
+
+  const settings = await prisma.userSettings.findUnique({ where: { userId } });
+  const preferredTime = settings?.preferredTime || "18:00";
+  const dailyGoalMinutes = settings?.dailyGoalMinutes ?? 60;
+
+  const todayRow = streakData.find((s) => {
+    const d = new Date(s.date as Date);
+    d.setHours(0, 0, 0, 0);
+    return d.getTime() === todayMs;
+  });
+  const minutesToday = (todayRow?.minutesSpent as number) || 0;
+
+  return {
+    currentStreak: calculateCurrentStreak(dates),
+    longestStreak: calculateLongestStreak(dates),
+    practicedToday,
+    practicedYesterday,
+    daysSinceLastPractice,
+    preferredTime,
+    minutesToday,
+    dailyGoalMinutes,
+    goalMet: minutesToday >= dailyGoalMinutes,
+  };
+}
+
+// ============================================================
 // GET ACHIEVEMENTS
 // ============================================================
 export async function getUserAchievements(userId: string) {
@@ -100,80 +175,17 @@ export async function checkAchievements(userId: string) {
   const existingNames = new Set((existing as any[]).map((a: any) => a.name));
   const newAchievements: { name: string; description: string; icon: string }[] = [];
 
-  // Streak achievements
-  if (stats.currentStreak >= 7 && !existingNames.has("7-dagars streak")) {
-    newAchievements.push({
-      name: "7-dagars streak",
-      description: "Tranat 7 dagar i rad!",
-      icon: "flame",
-    });
-  }
-  if (stats.currentStreak >= 30 && !existingNames.has("30-dagars streak")) {
-    newAchievements.push({
-      name: "30-dagars streak",
-      description: "Tranat 30 dagar i rad! Otroligt!",
-      icon: "fire",
-    });
+  for (const def of ACHIEVEMENTS) {
+    if (existingNames.has(def.name)) continue;
+    if (isUnlockedByStats(def, stats)) {
+      newAchievements.push({
+        name: def.name,
+        description: def.description,
+        icon: def.icon,
+      });
+    }
   }
 
-  // Level achievements
-  if (stats.levelCounts.competent >= 1 && !existingNames.has("Forsta Kompetent")) {
-    newAchievements.push({
-      name: "Forsta Kompetent",
-      description: "Din forsta teknik pa Kompetent-niva!",
-      icon: "star",
-    });
-  }
-  if (stats.levelCounts.skilled >= 5 && !existingNames.has("5 Skickliga tekniker")) {
-    newAchievements.push({
-      name: "5 Skickliga tekniker",
-      description: "5 tekniker pa Skicklig-niva!",
-      icon: "trophy",
-    });
-  }
-  if (stats.levelCounts.expert >= 1 && !existingNames.has("Forsta REFLEX")) {
-    newAchievements.push({
-      name: "Forsta REFLEX",
-      description: "Din forsta teknik sitter som en reflex!",
-      icon: "lightning",
-    });
-  }
-
-  // Session achievements
-  if (stats.sessionCount >= 10 && !existingNames.has("10 sessioner")) {
-    newAchievements.push({
-      name: "10 sessioner",
-      description: "Genomfort 10 traningssessioner!",
-      icon: "target",
-    });
-  }
-  if (stats.sessionCount >= 50 && !existingNames.has("50 sessioner")) {
-    newAchievements.push({
-      name: "50 sessioner",
-      description: "50 sessioner! Du ar pa vag mot mastery.",
-      icon: "medal",
-    });
-  }
-
-  // XP achievements
-  if (stats.totalXp >= 1000 && !existingNames.has("1000 XP")) {
-    newAchievements.push({
-      name: "1000 XP",
-      description: "Samlat 1000 XP!",
-      icon: "gem",
-    });
-  }
-
-  // Meeting analysis
-  if (stats.meetingCount >= 1 && !existingNames.has("Forsta motesanalys")) {
-    newAchievements.push({
-      name: "Forsta motesanalys",
-      description: "Analyserat ditt forsta riktiga mote!",
-      icon: "magnifier",
-    });
-  }
-
-  // Save new achievements
   for (const achievement of newAchievements) {
     await prisma.achievement.create({
       data: {

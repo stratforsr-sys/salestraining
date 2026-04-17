@@ -5,7 +5,9 @@ import Link from "next/link";
 import { XpBar } from "@/components/gamification/xp-bar";
 import { StreakDisplay } from "@/components/gamification/streak-display";
 import { LevelBadge } from "@/components/gamification/level-badge";
+import { StreakReminder } from "@/components/dashboard/streak-reminder";
 import type { WeakTechnique, DueRepetition } from "@/lib/knowledge-base";
+import type { StreakStatus } from "@/actions/gamification";
 
 interface DashboardStats {
   totalXp: number;
@@ -41,6 +43,7 @@ interface DashboardClientProps {
   dueReps: DueRepetition[];
   weakTechniques: WeakTechnique[];
   modules: ModuleWithTechniques[];
+  streakStatus: StreakStatus;
 }
 
 const stagger = {
@@ -61,7 +64,7 @@ function getXpLevel(totalXp: number) {
   return { level: "beginner", next: 500 };
 }
 
-export function DashboardClient({ stats, dueReps, weakTechniques, modules }: DashboardClientProps) {
+export function DashboardClient({ stats, dueReps, weakTechniques, modules, streakStatus }: DashboardClientProps) {
   const { level, next } = getXpLevel(stats.totalXp);
   const hasModules = modules.length > 0;
 
@@ -177,7 +180,7 @@ export function DashboardClient({ stats, dueReps, weakTechniques, modules }: Das
           ============================================================ */}
       <motion.div variants={fadeUp} className="flex-1 overflow-y-auto px-[var(--space-6)] py-[var(--space-6)]">
         {/* Header */}
-        <div className="mb-[var(--space-8)]">
+        <div className="mb-[var(--space-6)]">
           <h1
             className="font-heading text-3xl font-semibold"
             style={{ color: "var(--text-primary)", letterSpacing: "-0.03em" }}
@@ -193,6 +196,9 @@ export function DashboardClient({ stats, dueReps, weakTechniques, modules }: Das
             }
           </p>
         </div>
+
+        {/* Streak reminder (only renders when at risk) */}
+        <StreakReminder status={streakStatus} />
 
         {/* Due Repetitions */}
         {dueReps.length > 0 && (

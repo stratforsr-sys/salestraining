@@ -2,22 +2,22 @@
 
 import { prisma } from "@/lib/prisma";
 import { getXpReward } from "@/lib/spaced-repetition";
+import { getSession } from "@/lib/session";
+import { checkAchievements } from "@/actions/gamification";
 
 // ============================================================
 // SUBMIT REFLECTION
 // ============================================================
-export async function submitReflection(
-  userId: string,
-  data: {
-    sessionId?: string;
-    meetingId?: string;
-    question1: string; // Vilken teknik anvande du medvetet?
-    question2: string; // Beskriv svaraste ogonblicket
-    question3: string; // Vilken teknik borde du ha anvant?
-    question4: string; // Vilka 3 delar kan du forbattra?
-    question5: string; // OM [situation], DA gor jag [handling]
-  }
-) {
+export async function submitReflection(data: {
+  sessionId?: string;
+  meetingId?: string;
+  question1: string;
+  question2: string;
+  question3: string;
+  question4: string;
+  question5: string;
+}) {
+  const { userId } = await getSession();
   const reflection = await prisma.reflectionEntry.create({
     data: {
       userId,
@@ -43,7 +43,8 @@ export async function submitReflection(
     create: { userId, date: today, xpEarned: xp },
   });
 
-  return { reflectionId: reflection.id, xpEarned: xp };
+  const newAchievements = await checkAchievements(userId);
+  return { reflectionId: reflection.id, xpEarned: xp, newAchievements };
 }
 
 // ============================================================

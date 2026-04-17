@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { createModule } from "@/actions/modules";
 
-const USER_ID = "default-user";
-
 export default function NewModulePage() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -24,7 +22,7 @@ export default function NewModulePage() {
     setProgress("Analyserar anteckningar med AI...");
 
     try {
-      const result = await createModule(USER_ID, name.trim(), notes.trim(), source.trim() || undefined);
+      const result = await createModule(name.trim(), notes.trim(), source.trim() || undefined);
       setProgress(`${result.techniquesCreated} tekniker extraherade!`);
       setTimeout(() => router.push(`/modules/${result.moduleId}`), 800);
     } catch {

@@ -6,8 +6,6 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { analyzeRealMeeting } from "@/actions/meetings";
 
-const USER_ID = "default-user";
-
 export default function NewMeetingPage() {
   const router = useRouter();
   const [meetingType, setMeetingType] = useState("meeting_1");
@@ -23,7 +21,7 @@ export default function NewMeetingPage() {
     setProgress("Analyserar transkript med AI...");
 
     try {
-      const result = await analyzeRealMeeting(USER_ID, meetingType, transcript.trim());
+      const result = await analyzeRealMeeting(meetingType, transcript.trim());
       setProgress("Analys klar!");
       setTimeout(() => router.push(`/meetings/${result.id}`), 500);
     } catch {
