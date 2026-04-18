@@ -115,7 +115,9 @@ export async function submitScenarioAnswer(
     difficulty
   );
 
-  const xp = getXpReward("scenario_card", evaluation.score);
+  const safeScore = Math.max(0, Math.min(100, Math.round(Number(evaluation.score) || 0)));
+  evaluation.score = safeScore;
+  const xp = getXpReward("scenario_card", safeScore);
 
   // Save exercise attempt
   await prisma.exerciseAttempt.create({
@@ -127,16 +129,16 @@ export async function submitScenarioAnswer(
       prompt: scenario,
       userResponse,
       aiEvaluation: JSON.stringify(evaluation),
-      score: evaluation.score,
+      score: safeScore,
       xpEarned: xp,
     },
   });
 
   // Update skill progress
-  await updateSkillProgress(techniqueId, evaluation.score, difficulty, xp);
+  await updateSkillProgress(techniqueId, safeScore, difficulty, xp);
 
   // Update repetition card
-  await updateRepetitionCard(techniqueId, evaluation.score, userId);
+  await updateRepetitionCard(techniqueId, safeScore, userId);
 
   // Update session XP
   await prisma.practiceSession.update({
@@ -147,7 +149,7 @@ export async function submitScenarioAnswer(
   // Update daily streak
   await updateDailyStreak(userId, xp);
 
-  return { evaluation, score: evaluation.score, xpEarned: xp };
+  return { evaluation, score: safeScore, xpEarned: xp };
 }
 
 // ============================================================

@@ -40,14 +40,18 @@ export function PracticeClient() {
   const [score, setScore] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [cardCount, setCardCount] = useState(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const startSession = useCallback(async () => {
     setLoading(true);
+    setErrorMsg(null);
     try {
       const session = await startPracticeSession("scenario");
       setSessionId(session.id);
       await loadNextScenario(session.id);
-    } catch {
+    } catch (err) {
+      console.error("startPracticeSession failed:", err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
       setLoading(false);
     }
   }, []);
@@ -58,14 +62,16 @@ export function PracticeClient() {
     setFeedback(null);
     setScore(null);
     setShowDetails(false);
+    setErrorMsg(null);
 
     try {
       const result = await generateScenarioCard(techniqueId || undefined, difficulty);
       setScenario(result.scenario);
       setTechniqueId(result.techniqueId);
       setPhase("scenario");
-    } catch {
-      // Scenario generation failed
+    } catch (err) {
+      console.error("generateScenarioCard failed:", err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
     setLoading(false);
   }
@@ -74,6 +80,7 @@ export function PracticeClient() {
     if (!answer.trim() || !sessionId || !scenario) return;
     setLoading(true);
     setPhase("feedback");
+    setErrorMsg(null);
 
     try {
       const result = await submitScenarioAnswer(
@@ -86,8 +93,10 @@ export function PracticeClient() {
       setFeedback(result.evaluation);
       setScore(result.score);
       setCardCount((c) => c + 1);
-    } catch {
-      // Evaluation failed
+    } catch (err) {
+      console.error("submitScenarioAnswer failed:", err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+      setPhase("scenario");
     }
     setLoading(false);
   }
@@ -101,6 +110,19 @@ export function PracticeClient() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-56px)] px-[var(--space-6)] py-[var(--space-8)]">
+      {errorMsg && (
+        <div
+          className="w-full max-w-xl mb-[var(--space-4)] px-[var(--space-4)] py-[var(--space-3)] text-sm"
+          style={{
+            background: "var(--error-muted)",
+            color: "var(--error)",
+            border: "1px solid var(--error)",
+            borderRadius: "var(--radius-md)",
+          }}
+        >
+          Fel: {errorMsg}
+        </div>
+      )}
       <AnimatePresence mode="wait">
         {/* ============================================================
             SETUP PHASE

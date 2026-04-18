@@ -25,6 +25,16 @@ interface Scorecard {
   naturalFormulation: number;
   totalScore: number;
   detailedFeedback: string;
+  hiddenMotivesScore?: number | null;
+  hiddenMotivesDetails?: string | null;
+}
+
+interface HiddenMotiveDetail {
+  secret?: string;
+  trigger?: string;
+  detected?: boolean;
+  evidence?: string;
+  detectedAtTimestamp?: number;
 }
 
 interface FeedbackItem {
@@ -58,6 +68,7 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
   });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [ended, setEnded] = useState(!!roleplay.scorecard);
   const [scorecard, setScorecard] = useState<Scorecard | null>(roleplay.scorecard);
   const [feedbackItems, setFeedbackItems] = useState<FeedbackItem[]>(roleplay.feedbackItems || []);
@@ -169,8 +180,9 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
     try {
       const result = await sendRoleplayMessage(roleplay.id, text, elapsed);
       setMessages([...newMessages, { role: "buyer", content: result.buyerResponse, timestamp: elapsed }]);
-    } catch {
-      // Message send failed
+    } catch (err) {
+      console.error("sendRoleplayMessage failed:", err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
     setLoading(false);
   }
@@ -179,6 +191,7 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
     tts.cancel();
     if (stt.listening) stt.stop();
     setLoading(true);
+    setErrorMsg(null);
     try {
       const result = await endRoleplay(roleplay.id);
       const eval_ = result.evaluation;
@@ -190,6 +203,10 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
         naturalFormulation: eval_.breakdown.naturalFormulation.score,
         totalScore: eval_.score,
         detailedFeedback: "",
+        hiddenMotivesScore: eval_.hiddenMotivesScore ?? null,
+        hiddenMotivesDetails: eval_.hiddenMotivesDetails
+          ? JSON.stringify(eval_.hiddenMotivesDetails)
+          : null,
       });
       setDetailedParsed({
         strengths: eval_.strengths,
@@ -205,8 +222,9 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
       });
       setFeedbackItems(result.timestampedFeedback || []);
       setEnded(true);
-    } catch {
-      // End roleplay failed
+    } catch (err) {
+      console.error("endRoleplay failed:", err);
+      setErrorMsg(err instanceof Error ? err.message : String(err));
     }
     setLoading(false);
   }
@@ -326,6 +344,20 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
             ))}
           </AnimatePresence>
 
+          {errorMsg && (
+            <div
+              className="px-[var(--space-4)] py-[var(--space-3)] text-sm"
+              style={{
+                background: "var(--error-muted)",
+                color: "var(--error)",
+                border: "1px solid var(--error)",
+                borderRadius: "var(--radius-md)",
+              }}
+            >
+              Fel: {errorMsg}
+            </div>
+          )}
+
           {loading && !ended && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
               <div
@@ -400,6 +432,8 @@ export function RoleplayChatClient({ roleplay }: { roleplay: RoleplayData }) {
                 <ScoreCell key={item.label} {...item} />
               ))}
             </div>
+
+            <HiddenMotivesBlock scorecard={scorecard} formatTime={formatTime} />
 
             {feedbackItems.length > 0 && (
               <div className="mb-[var(--space-6)]">
@@ -796,6 +830,142 @@ interface ParsedFeedback {
     meetingStructure?: string;
     naturalFormulation?: string;
   };
+}
+
+function HiddenMotivesBlock({
+  scorecard,
+  formatTime,
+}: {
+  scorecard: Scorecard;
+  formatTime: (s: number) => string;
+}) {
+  const score = scorecard.hiddenMotivesScore;
+  let details: HiddenMotiveDetail[] = [];
+  if (scorecard.hiddenMotivesDetails) {
+    try {
+      const parsed = JSON.parse(scorecard.hiddenMotivesDetails);
+      if (Array.isArray(parsed)) details = parsed as HiddenMotiveDetail[];
+    } catch {
+      // ignore
+    }
+  }
+
+  if (score === null || score === undefined) return null;
+  if (details.length === 0 && score === 0) return null;
+
+  const color =
+    score >= 70 ? "var(--success)" : score >= 40 ? "var(--warning)" : "var(--error)";
+  const muted =
+    score >= 70
+      ? "var(--success-muted)"
+      : score >= 40
+      ? "var(--warning-muted)"
+      : "var(--error-muted)";
+
+  const detectedCount = details.filter((d) => d.detected).length;
+
+  return (
+    <div
+      className="mb-[var(--space-6)] px-[var(--space-5)] py-[var(--space-4)]"
+      style={{
+        background: muted,
+        border: `1px solid ${color}`,
+        borderRadius: "var(--radius-md)",
+      }}
+    >
+      <div className="flex items-center justify-between mb-[var(--space-3)]">
+        <div className="flex items-center gap-[var(--space-3)]">
+          <div
+            className="w-10 h-10 flex items-center justify-center"
+            style={{
+              background: "var(--bg-panel)",
+              border: `1px solid ${color}`,
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5">
+              <rect x="3.5" y="7" width="9" height="6" rx="1" />
+              <path d="M5.5 7V5a2.5 2.5 0 015 0v2" />
+            </svg>
+          </div>
+          <div>
+            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              Dolda motiv
+            </div>
+            <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              {detectedCount} av {details.length} motiv hittade
+            </div>
+          </div>
+        </div>
+        <div
+          className="font-mono text-xl font-bold"
+          style={{ color }}
+        >
+          {score}
+        </div>
+      </div>
+      {details.length > 0 && (
+        <div className="flex flex-col gap-[var(--space-2)] mt-[var(--space-3)]">
+          {details.map((d, i) => (
+            <div
+              key={i}
+              className="px-[var(--space-3)] py-[var(--space-2)] text-sm"
+              style={{
+                background: "var(--bg-panel)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "var(--radius-sm)",
+              }}
+            >
+              <div className="flex items-start justify-between gap-[var(--space-3)] mb-[var(--space-1)]">
+                <div className="flex items-center gap-[var(--space-2)]">
+                  <span
+                    className="text-[10px] px-[var(--space-2)] py-[1px] uppercase tracking-wider"
+                    style={{
+                      background: d.detected ? "var(--success-muted)" : "var(--bg-elevated)",
+                      color: d.detected ? "var(--success)" : "var(--text-tertiary)",
+                      border: `1px solid ${d.detected ? "var(--success)" : "var(--border-subtle)"}`,
+                      borderRadius: "var(--radius-sm)",
+                    }}
+                  >
+                    {d.detected ? "Hittad" : "Missad"}
+                  </span>
+                  {d.detected && d.detectedAtTimestamp !== undefined && (
+                    <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      {formatTime(d.detectedAtTimestamp)}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {d.secret && (
+                <div
+                  className="text-xs mb-[var(--space-1)]"
+                  style={{ color: "var(--text-secondary)" }}
+                >
+                  <span style={{ color: "var(--text-tertiary)" }}>Hemlighet: </span>
+                  {d.secret}
+                </div>
+              )}
+              {d.trigger && (
+                <div
+                  className="text-xs mb-[var(--space-1)]"
+                  style={{ color: "var(--text-tertiary)" }}
+                >
+                  <span>Trigger: </span>
+                  {d.trigger}
+                </div>
+              )}
+              {d.evidence && (
+                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  <span>Bevis: </span>
+                  <span style={{ color: "var(--text-secondary)" }}>{d.evidence}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function parseDetailedFeedback(raw: string): ParsedFeedback | null {

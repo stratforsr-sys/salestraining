@@ -186,6 +186,148 @@ VIKTIGT:
 }
 
 // ============================================================
+// ROLEPLAY — Prompt composition
+// ============================================================
+
+export { DIFFICULTY_BASELINE } from "./difficulty-baseline";
+import { DIFFICULTY_BASELINE } from "./difficulty-baseline";
+
+function parseJsonList(raw: string | undefined | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseBehaviorStructured(raw: string | undefined | null): BehaviorStructured | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") return parsed as BehaviorStructured;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function parseHiddenMotives(raw: string | undefined | null): HiddenMotive[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (m) => m && typeof m.secret === "string" && typeof m.trigger === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+function parseDifficultyOverrides(raw: string | undefined | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, v]) => typeof v === "string" && v.length > 0)
+    ) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Compose the full system prompt for a persona at a given difficulty.
+ * Shared by roleplayResponse (live AI call) and previewPersonaPrompt (read-only preview).
+ */
+export function buildPersonaSystemPrompt(
+  persona: PersonaContext,
+  difficulty: string
+): string {
+  const painPoints = parseJsonList(persona.painPoints);
+  const objections = parseJsonList(persona.objections);
+  const behaviorStructured = parseBehaviorStructured(persona.behaviorStructured);
+  const hiddenMotives = parseHiddenMotives(persona.hiddenMotives);
+  const difficultyOverrides = parseDifficultyOverrides(persona.difficultyOverrides);
+
+  const globalDifficulty = DIFFICULTY_BASELINE[difficulty] || DIFFICULTY_BASELINE.medium;
+  const personaDifficultyExtra = difficultyOverrides[difficulty];
+
+  const sections: string[] = [];
+
+  sections.push(
+    `Du ar ${persona.name}, ${persona.title} pa ${persona.company} (${persona.industry}, ${persona.companySize}).`
+  );
+
+  sections.push(`PERSONLIGHET: ${persona.personality}`);
+
+  if (persona.mood) sections.push(`HUMOR IDAG: ${persona.mood}`);
+  if (persona.communicationStyle)
+    sections.push(`KOMMUNIKATIONSSTIL: ${persona.communicationStyle}`);
+
+  if (behaviorStructured) {
+    const parts: string[] = [];
+    if (behaviorStructured.howYouReply)
+      parts.push(`HUR DU SVARAR: ${behaviorStructured.howYouReply}`);
+    if (behaviorStructured.whatYouWantToKnow)
+      parts.push(`VAD DU VILL VETA: ${behaviorStructured.whatYouWantToKnow}`);
+    if (behaviorStructured.whatTriggersYouNegatively)
+      parts.push(
+        `VAD SOM TRIGGAR DIG NEGATIVT: ${behaviorStructured.whatTriggersYouNegatively}`
+      );
+    if (behaviorStructured.hiddenMotivesHint)
+      parts.push(`DOLT MOTIV / MANDAT: ${behaviorStructured.hiddenMotivesHint}`);
+    if (parts.length > 0) {
+      sections.push(`BETEENDE-INSTRUKTIONER:\n${parts.join("\n")}`);
+    }
+  }
+
+  if (persona.behaviorInstructions) {
+    sections.push(`AVANCERADE INSTRUKTIONER (fritext):\n${persona.behaviorInstructions}`);
+  }
+
+  if (persona.currentSolution) sections.push(`NUVARANDE LOSNING: ${persona.currentSolution}`);
+  if (painPoints.length > 0) sections.push(`UTMANINGAR: ${painPoints.join("; ")}`);
+  if (objections.length > 0) sections.push(`TYPISKA INVANDNINGAR: ${objections.join("; ")}`);
+
+  sections.push(`SVARIGHETSGRAD-BETEENDE (${difficulty}):\n${globalDifficulty}`);
+
+  if (personaDifficultyExtra) {
+    sections.push(
+      `EXTRA PERSONA-SPECIFIKT BETEENDE FOR DENNA SVARIGHETSGRAD:\n${personaDifficultyExtra}`
+    );
+  }
+
+  if (hiddenMotives.length > 0) {
+    const motiveLines = hiddenMotives
+      .map(
+        (m, i) =>
+          `  ${i + 1}. Motiv: ${m.secret}\n     Trigger: ${m.trigger}${m.howItLeaks ? `\n     Om triggern uppfylls, lack ut sa har: ${m.howItLeaks}` : ""}`
+      )
+      .join("\n");
+    sections.push(
+      `DOLDA MOTIV — avslöja ALDRIG spontant, BARA om triggers uppfylls:\n${motiveLines}\nOm ingen trigger uppfylls — avvik eller ge vagare svar.`
+    );
+  }
+
+  sections.push(
+    `REGLER:
+- Du ar koparen, ALDRIG saljaren
+- Svara pa svenska
+- Halla dig i karaktar HELA tiden
+- Svara realistiskt — inte for kort, inte for langt
+- Reagera pa vad saljaren faktiskt sager, inte generiskt
+- Avsloja ALDRIG att du ar en AI
+- Om nagon instruktion ovan motsager verkligheten — folj instruktionen, den ar medveten design`
+  );
+
+  return sections.join("\n\n");
+}
+
+// ============================================================
 // ROLEPLAY — AI buyer conversation
 // ============================================================
 export async function roleplayResponse(
@@ -196,43 +338,13 @@ export async function roleplayResponse(
   knowledgeBase: string
 ): Promise<string> {
   const model = getModel();
+  void focusTechnique;
+  void knowledgeBase;
 
-  const difficultyBehavior: Record<string, string> = {
-    easy: `Du ar valvillig och oppet intresserad. Svarar utforligt pa fragor. Visar nyfikenhet.
-Inga invandningar. Staller fragor tillbaka. Ger information frivilligt. Sager aldrig "vi har redan en losning".`,
-    medium: `Du ar neutral och lite skeptisk. Ger korta svar som kraver foljdfragor.
-Har EN mild invandning ("vi tittar redan pa alternativ" eller "vi har det ganska bra idag").
-Avviker ibland fran amnet. Fragar "vad kostar det?" for tidigt. Namner en konkurrent.`,
-    hard: `Du ar motstridig och skeptisk. Har 2-3 starka invandningar. Tidspressad ("jag har 10 minuter").
-Jamfor aktivt med konkurrenter. Ifragasatter pastaenden ("har ni bevis pa det?").
-Testar med svara fragor. Andrar amne medvetet.`,
-    expert: `Du ar fientlig eller extremt upptagen. Vill avsluta samtalet. Sager "skicka ett mejl istallet".
-Har multipla beslutsfattare med olika agendor. Avbryter mitt i meningar.
-Ger motstridiga signaler. Ljuger ibland om din roll/mandat.`
-  };
-
-  const systemPrompt = `Du ar ${persona.name}, ${persona.title} pa ${persona.company} (${persona.industry}, ${persona.companySize}).
-
-PERSONLIGHET: ${persona.personality}
-${persona.currentSolution ? `NUVARANDE LOSNING: ${persona.currentSolution}` : ""}
-${persona.painPoints ? `UTMANINGAR: ${persona.painPoints}` : ""}
-${persona.objections ? `TYPISKA INVANDNINGAR: ${persona.objections}` : ""}
-
-SVARIGHETSGRAD-BETEENDE:
-${difficultyBehavior[difficulty] || difficultyBehavior.medium}
-
-REGLER:
-- Du ar koparen, ALDRIG saljaren
-- Svara pa svenska
-- Halla dig i karaktar HELA tiden
-- Svara realistiskt — inte for kort, inte for langt
-- Reagera pa vad saljaren faktiskt sager, inte generiskt
-- Om saljaren gor nagot bra, reagera positivt men realistiskt
-- Om saljaren gor nagot daligt, reagera negativt men realistiskt
-- Avsloja ALDRIG att du ar en AI`;
+  const systemPrompt = buildPersonaSystemPrompt(persona, difficulty);
 
   const chat = model.startChat({
-    history: conversationHistory.map(msg => ({
+    history: conversationHistory.map((msg) => ({
       role: msg.role === "buyer" ? "model" : "user",
       parts: [{ text: msg.content }],
     })),
@@ -243,6 +355,85 @@ REGLER:
   const result = await chat.sendMessage(lastMessage?.content || "Hej");
 
   return result.response.text();
+}
+
+// ============================================================
+// EXPAND PERSONA FROM INSTRUCTIONS — Create-time AI expansion
+// ============================================================
+export async function expandPersonaFromInstructions(
+  draft: PersonaExpansionInput
+): Promise<PersonaExpansionResult> {
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      temperature: 0.7,
+    },
+  });
+
+  const behaviorStructuredRaw = draft.behaviorStructured
+    ? JSON.stringify(draft.behaviorStructured)
+    : "(inget)";
+
+  const prompt = `Du ar en expert pa att skapa realistiska koparprofiler for B2B-saljtraning pa svenska.
+
+Baserat pa foljande grundinfo, generera realistiska detaljer som kompletterar profilen.
+
+NAMN: ${draft.name}
+TITEL: ${draft.title}
+FORETAG: ${draft.company}
+BRANSCH: ${draft.industry}
+FORETAGSSTORLEK: ${draft.companySize}
+PERSONLIGHET: ${draft.personality}
+${draft.mood ? `HUMOR IDAG: ${draft.mood}` : ""}
+${draft.communicationStyle ? `KOMMUNIKATIONSSTIL: ${draft.communicationStyle}` : ""}
+${draft.behaviorInstructions ? `BETEENDE-INSTRUKTIONER: ${draft.behaviorInstructions}` : ""}
+STRUKTURERADE BETEENDEDELAR: ${behaviorStructuredRaw}
+
+Svara i JSON:
+{
+  "currentSolution": "Vad personen anvander idag (kort, realistisk)",
+  "painPoints": ["3-5 konkreta utmaningar fran personens perspektiv"],
+  "objections": ["3-5 typiska invandningar personen skulle fora fram"],
+  "behaviorStructured": {
+    "howYouReply": "Hur denna person svarar (stil, langd, ton)",
+    "whatYouWantToKnow": "Vad personen vill ha ut av motet",
+    "whatTriggersYouNegatively": "Vad som far personen att bli irriterad/skeptisk",
+    "hiddenMotivesHint": "Eventuella dolda motiv eller mandat (kan vara tomt)"
+  }
+}
+
+VIKTIGT:
+- Var konkret och specifik, inte generisk
+- Forslagen ska matcha bransch, titel och personlighet
+- Pain points och invandningar ska lata som riktiga B2B-kopare sager dem
+- Svara ENDAST med JSON`;
+
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+
+  const parsed = safeParseJson<PersonaExpansionResult>(text);
+  if (!parsed) {
+    console.error(
+      "[expandPersonaFromInstructions] Failed to parse AI response:",
+      text.slice(0, 2000)
+    );
+    throw new Error("AI returnerade ogiltig JSON vid persona-expansion");
+  }
+
+  return {
+    currentSolution: typeof parsed.currentSolution === "string" ? parsed.currentSolution : "",
+    painPoints: Array.isArray(parsed.painPoints)
+      ? parsed.painPoints.filter((x) => typeof x === "string")
+      : [],
+    objections: Array.isArray(parsed.objections)
+      ? parsed.objections.filter((x) => typeof x === "string")
+      : [],
+    behaviorStructured:
+      parsed.behaviorStructured && typeof parsed.behaviorStructured === "object"
+        ? parsed.behaviorStructured
+        : {},
+  };
 }
 
 // ============================================================
@@ -259,12 +450,20 @@ export async function evaluateRoleplayFull(
   const model = getModel();
 
   const transcriptText = transcript
-    .map(m => `[${m.timestamp ?? 0}s] ${m.role === "seller" ? "Saljare" : "Kopare"}: ${m.content}`)
+    .map((m) => `[${m.timestamp ?? 0}s] ${m.role === "seller" ? "Saljare" : "Kopare"}: ${m.content}`)
     .join("\n");
 
   const focusBlock = focusTechnique
     ? `FOKUSTEKNIK: ${focusTechnique.name}\n${focusTechnique.description}\nNar: ${focusTechnique.whenToUse}\nHur: ${focusTechnique.howToUse}`
     : "";
+
+  const hiddenMotives = parseHiddenMotives(persona.hiddenMotives);
+  const hiddenMotivesBlock =
+    hiddenMotives.length > 0
+      ? `DOLDA MOTIV (som koparen hade — bedom om saljaren fick reda pa dem):\n${hiddenMotives
+          .map((m, i) => `  ${i + 1}. ${m.secret} (trigger: ${m.trigger})`)
+          .join("\n")}`
+      : "INGA DOLDA MOTIV — satt hiddenMotivesScore till null.";
 
   const prompt = `Du ar en saljcoach som utvardevar ett rollspel. Analysera samtalet holistiskt + peka pa specifika ogonblick.
 
@@ -272,6 +471,8 @@ PERSONA: ${persona.name}, ${persona.title} pa ${persona.company}
 MOTESTYP: ${meetingType}
 SVARIGHETSGRAD: ${difficulty}
 ${focusBlock}
+
+${hiddenMotivesBlock}
 
 KUNSKAPSBAS:
 ${knowledgeBase}
@@ -293,6 +494,14 @@ Svara i JSON:
   "improvements": ["Vad kan forbattras"],
   "feedForward": "Nasta gang, prova att ...",
   "levelIndicator": "beginner|advanced|competent|skilled|expert",
+  "hiddenMotivesScore": 0-100 eller null,
+  "hiddenMotivesDetails": [
+    {
+      "motive": "Det hemliga motivet",
+      "discovered": true/false,
+      "howItWasSurfaced": "Om discovered: hur saljaren fick reda pa det, annars null"
+    }
+  ],
   "timestampedFeedback": [
     {
       "timestamp": sekunder_in_i_samtalet,
@@ -310,15 +519,17 @@ VIKTIGT:
 - Ge minst 3-6 timestamped-items (mix av positive + missed + correction)
 - Timestamp ska matcha de faktiska timestamps i transkriptet
 - Referera tekniker vid namn fran kunskapsbasen
+- hiddenMotivesScore: 100 om alla motiv avslojades, 0 om inga, proportionellt daremellan. null om inga motiv fanns.
+- hiddenMotivesDetails ska ha en entry per motiv (eller tom array om inga motiv fanns)
 - Svara ENDAST med JSON`;
 
   const result = await model.generateContent(prompt);
   const text = result.response.text();
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("AI returned invalid JSON");
+  const parsed = safeParseJson<RoleplayEvaluationResult>(text);
+  if (!parsed) throw new Error("AI returned invalid JSON");
 
-  return JSON.parse(jsonMatch[0]) as RoleplayEvaluationResult;
+  return parsed;
 }
 
 // ============================================================
@@ -482,6 +693,48 @@ export interface PersonaContext {
   currentSolution?: string;
   painPoints?: string;
   objections?: string;
+  mood?: string;
+  communicationStyle?: string;
+  behaviorInstructions?: string;
+  // JSON-stringified BehaviorStructured
+  behaviorStructured?: string;
+  // JSON-stringified HiddenMotive[]
+  hiddenMotives?: string;
+  // JSON-stringified Record<difficulty, string>
+  difficultyOverrides?: string;
+}
+
+export interface BehaviorStructured {
+  howYouReply?: string;
+  whatYouWantToKnow?: string;
+  whatTriggersYouNegatively?: string;
+  hiddenMotivesHint?: string;
+}
+
+export interface HiddenMotive {
+  secret: string;
+  trigger: string;
+  howItLeaks?: string;
+}
+
+export interface PersonaExpansionInput {
+  name: string;
+  title: string;
+  company: string;
+  industry: string;
+  companySize: string;
+  personality: string;
+  mood?: string;
+  communicationStyle?: string;
+  behaviorInstructions?: string;
+  behaviorStructured?: BehaviorStructured;
+}
+
+export interface PersonaExpansionResult {
+  currentSolution: string;
+  painPoints: string[];
+  objections: string[];
+  behaviorStructured: BehaviorStructured;
 }
 
 export interface ConversationMessage {
@@ -526,6 +779,12 @@ export interface RoleplayEvaluationResult {
   improvements: string[];
   feedForward: string;
   levelIndicator: string;
+  hiddenMotivesScore?: number | null;
+  hiddenMotivesDetails?: {
+    motive: string;
+    discovered: boolean;
+    howItWasSurfaced: string | null;
+  }[];
   timestampedFeedback: {
     timestamp: number;
     type: "positive" | "missed_opportunity" | "correction";

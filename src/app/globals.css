@@ -119,6 +119,11 @@ body {
   100% { background-position: 200% 0; }
 }
 
+@keyframes pulse-dot {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
 .skeleton {
   background: linear-gradient(
     90deg,

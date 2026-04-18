@@ -24,8 +24,10 @@ export default function NewMeetingPage() {
       const result = await analyzeRealMeeting(meetingType, transcript.trim());
       setProgress("Analys klar!");
       setTimeout(() => router.push(`/meetings/${result.id}`), 500);
-    } catch {
-      setProgress("Något gick fel. Försök igen.");
+    } catch (err) {
+      console.error("analyzeRealMeeting failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      setProgress(`Fel: ${message}`);
       setLoading(false);
     }
   }

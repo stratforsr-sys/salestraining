@@ -19,6 +19,27 @@ export async function startRoleplay(
   const persona = await prisma.persona.findUnique({ where: { id: personaId } });
   if (!persona) throw new Error("Persona not found");
 
+  // Snapshot persona — frozen at start of roleplay for historical integrity.
+  const personaSnapshot = {
+    id: persona.id,
+    name: persona.name,
+    title: persona.title,
+    company: persona.company,
+    industry: persona.industry,
+    companySize: persona.companySize,
+    personality: persona.personality,
+    currentSolution: persona.currentSolution,
+    painPoints: persona.painPoints,
+    objections: persona.objections,
+    avatarUrl: persona.avatarUrl,
+    mood: persona.mood,
+    communicationStyle: persona.communicationStyle,
+    behaviorInstructions: persona.behaviorInstructions,
+    behaviorStructured: persona.behaviorStructured,
+    hiddenMotives: persona.hiddenMotives,
+    difficultyOverrides: persona.difficultyOverrides,
+  };
+
   const roleplay = await prisma.roleplaySession.create({
     data: {
       sessionId,
@@ -27,6 +48,7 @@ export async function startRoleplay(
       difficulty,
       focusTechnique: focusTechniqueId || null,
       transcript: JSON.stringify([]),
+      personaSnapshot: JSON.stringify(personaSnapshot),
       duration: 0,
     },
   });
@@ -42,6 +64,12 @@ export async function startRoleplay(
     currentSolution: persona.currentSolution || undefined,
     painPoints: persona.painPoints || undefined,
     objections: persona.objections || undefined,
+    mood: persona.mood || undefined,
+    communicationStyle: persona.communicationStyle || undefined,
+    behaviorInstructions: persona.behaviorInstructions || undefined,
+    behaviorStructured: persona.behaviorStructured || undefined,
+    hiddenMotives: persona.hiddenMotives || undefined,
+    difficultyOverrides: persona.difficultyOverrides || undefined,
   };
 
   const session = await prisma.practiceSession.findUnique({
@@ -85,6 +113,57 @@ export async function startRoleplay(
 }
 
 // ============================================================
+// Helper — PersonaContext from roleplay (prefers snapshot over live)
+// ============================================================
+interface PersonaLike {
+  name: string;
+  title: string;
+  company: string;
+  industry: string;
+  companySize: string;
+  personality: string;
+  currentSolution?: string | null;
+  painPoints?: string | null;
+  objections?: string | null;
+  mood?: string | null;
+  communicationStyle?: string | null;
+  behaviorInstructions?: string | null;
+  behaviorStructured?: string | null;
+  hiddenMotives?: string | null;
+  difficultyOverrides?: string | null;
+}
+
+function resolvePersonaContext(
+  roleplay: { personaSnapshot: string | null; persona: PersonaLike }
+): PersonaContext {
+  let source: PersonaLike = roleplay.persona;
+  if (roleplay.personaSnapshot) {
+    try {
+      source = JSON.parse(roleplay.personaSnapshot) as PersonaLike;
+    } catch {
+      // fall back to live persona
+    }
+  }
+  return {
+    name: source.name,
+    title: source.title,
+    company: source.company,
+    industry: source.industry,
+    companySize: source.companySize,
+    personality: source.personality,
+    currentSolution: source.currentSolution || undefined,
+    painPoints: source.painPoints || undefined,
+    objections: source.objections || undefined,
+    mood: source.mood || undefined,
+    communicationStyle: source.communicationStyle || undefined,
+    behaviorInstructions: source.behaviorInstructions || undefined,
+    behaviorStructured: source.behaviorStructured || undefined,
+    hiddenMotives: source.hiddenMotives || undefined,
+    difficultyOverrides: source.difficultyOverrides || undefined,
+  };
+}
+
+// ============================================================
 // SEND MESSAGE IN ROLEPLAY
 // ============================================================
 export async function sendRoleplayMessage(
@@ -111,17 +190,7 @@ export async function sendRoleplayMessage(
     timestamp: elapsedSeconds,
   });
 
-  const personaCtx: PersonaContext = {
-    name: roleplay.persona.name,
-    title: roleplay.persona.title,
-    company: roleplay.persona.company,
-    industry: roleplay.persona.industry,
-    companySize: roleplay.persona.companySize,
-    personality: roleplay.persona.personality,
-    currentSolution: roleplay.persona.currentSolution || undefined,
-    painPoints: roleplay.persona.painPoints || undefined,
-    objections: roleplay.persona.objections || undefined,
-  };
+  const personaCtx = resolvePersonaContext(roleplay);
 
   const knowledgeBase = await buildKnowledgeBase(roleplay.session.userId);
 
@@ -185,17 +254,7 @@ export async function endRoleplay(roleplayId: string) {
     }
   }
 
-  const personaCtx: PersonaContext = {
-    name: roleplay.persona.name,
-    title: roleplay.persona.title,
-    company: roleplay.persona.company,
-    industry: roleplay.persona.industry,
-    companySize: roleplay.persona.companySize,
-    personality: roleplay.persona.personality,
-    currentSolution: roleplay.persona.currentSolution || undefined,
-    painPoints: roleplay.persona.painPoints || undefined,
-    objections: roleplay.persona.objections || undefined,
-  };
+  const personaCtx = resolvePersonaContext(roleplay);
 
   const evaluation = await evaluateRoleplayFull(
     transcript,
@@ -206,6 +265,11 @@ export async function endRoleplay(roleplayId: string) {
     knowledgeBase
   );
 
+  const hiddenMotivesScore =
+    typeof evaluation.hiddenMotivesScore === "number"
+      ? Math.max(0, Math.min(100, Math.round(evaluation.hiddenMotivesScore)))
+      : null;
+
   await prisma.scorecard.create({
     data: {
       roleplayId,
@@ -215,6 +279,10 @@ export async function endRoleplay(roleplayId: string) {
       meetingStructure: evaluation.breakdown.meetingStructure.score,
       naturalFormulation: evaluation.breakdown.naturalFormulation.score,
       totalScore: evaluation.score,
+      hiddenMotivesScore,
+      hiddenMotivesDetails: evaluation.hiddenMotivesDetails
+        ? JSON.stringify(evaluation.hiddenMotivesDetails)
+        : null,
       detailedFeedback: JSON.stringify({
         strengths: evaluation.strengths,
         improvements: evaluation.improvements,

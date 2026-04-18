@@ -23,6 +23,7 @@ model User {
   achievements     Achievement[]
   dailyStreaks     DailyStreak[]
   settings         UserSettings?
+  personas         Persona[]
 }
 
 model UserSettings {
@@ -134,18 +135,37 @@ model RepetitionCard {
 // ============================================================
 model Persona {
   id              String @id @default(cuid())
+  userId          String?
+  user            User? @relation(fields: [userId], references: [id])
   name            String // "Anna Lindstrom"
   title           String // "IT-chef"
   company         String // "TechNord AB"
   industry        String // "SaaS / Tech"
   companySize     String // "200 anstallda"
-  personality     String // Description of behavior style
+  personality     String // Short description of behavior style
   currentSolution String? // What they currently use
   painPoints      String? // JSON array of pain points
   objections      String? // JSON array of typical objections
   avatarUrl       String? // Path to avatar image
-  isDefault       Boolean @default(true)
-  createdAt       DateTime @default(now())
+  isDefault       Boolean @default(false)
+  sharedWithTeam  Boolean @default(false)
+  isArchived      Boolean @default(false)
+  archivedAt      DateTime?
+
+  // Behavior configuration (user-authored)
+  mood                 String? // "stressad", "nyfiken"
+  communicationStyle   String? // "kortfattad, formell"
+  behaviorInstructions String? // Free-text advanced instructions (max 2000 chars)
+  behaviorStructured   String? // JSON: { howYouReply, whatYouWantToKnow, whatTriggersYouNegatively, hiddenMotivesHint }
+
+  // Hidden motives — JSON array<{ secret, trigger, howItLeaks }>
+  hiddenMotives String?
+
+  // Per-difficulty override texts — JSON: { easy?, medium?, hard?, expert? }
+  difficultyOverrides String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt @default(now())
 
   roleplaySessions RoleplaySession[]
 }
@@ -200,6 +220,10 @@ model RoleplaySession {
   transcript    String // JSON: array of {role, content, timestamp}
   duration      Int    @default(0) // seconds
 
+  // Snapshot of persona at start — preserves historical integrity.
+  // JSON: full Persona-record fields used when the roleplay started.
+  personaSnapshot String?
+
   scorecard     Scorecard?
   feedbackItems TimestampedFeedback[]
 }
@@ -215,6 +239,10 @@ model Scorecard {
   meetingStructure     Int @default(0) // 0-15: Meeting structure maintained
   naturalFormulation   Int @default(0) // 0-15: Natural language, not robotic
   totalScore           Int @default(0) // 0-100 computed
+
+  // Hidden motives scoring (null when persona had no hidden motives)
+  hiddenMotivesScore   Int?
+  hiddenMotivesDetails String? // JSON: Array<{ motive, discovered, howItWasSurfaced }>
 
   detailedFeedback String // AI-generated detailed text feedback
   createdAt        DateTime @default(now())

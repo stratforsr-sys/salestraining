@@ -25,8 +25,10 @@ export default function NewModulePage() {
       const result = await createModule(name.trim(), notes.trim(), source.trim() || undefined);
       setProgress(`${result.techniquesCreated} tekniker extraherade!`);
       setTimeout(() => router.push(`/modules/${result.moduleId}`), 800);
-    } catch {
-      setProgress("Något gick fel. Försök igen.");
+    } catch (err) {
+      console.error("createModule failed:", err);
+      const message = err instanceof Error ? err.message : String(err);
+      setProgress(`Fel: ${message}`);
       setLoading(false);
     }
   }

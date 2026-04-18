@@ -55,6 +55,8 @@ export default async function RoleplayChatPage({
           naturalFormulation: roleplay.scorecard.naturalFormulation,
           totalScore: roleplay.scorecard.totalScore,
           detailedFeedback: roleplay.scorecard.detailedFeedback,
+          hiddenMotivesScore: roleplay.scorecard.hiddenMotivesScore ?? null,
+          hiddenMotivesDetails: roleplay.scorecard.hiddenMotivesDetails ?? null,
         }
       : null,
     feedbackItems: (roleplay.feedbackItems as FeedbackRow[]).map((f) => ({

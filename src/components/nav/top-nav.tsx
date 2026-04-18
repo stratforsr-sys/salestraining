@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { label: "Moduler", href: "/modules", icon: BookIcon },
   { label: "Öva", href: "/practice", icon: TargetIcon },
   { label: "Rollspel", href: "/roleplay", icon: UsersIcon },
+  { label: "Personas", href: "/personas", icon: PersonaIcon },
   { label: "Möten", href: "/meetings", icon: MicIcon },
 ] as const;
 
@@ -261,6 +262,15 @@ function UsersIcon({ size = 16, active = false }: { size?: number; active?: bool
       <path d="M1.5 14c0-2.5 2-4 4.5-4s4.5 1.5 4.5 4" />
       <circle cx="11" cy="5.5" r="1.8" />
       <path d="M14.5 14c0-2 -1.5-3.2-3.5-3.5" />
+    </svg>
+  );
+}
+
+function PersonaIcon({ size = 16, active = false }: { size?: number; active?: boolean }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={active ? "var(--accent)" : "currentColor"} strokeWidth="1.5">
+      <circle cx="8" cy="5.5" r="2.5" />
+      <path d="M3 13c0-2.5 2-4 5-4s5 1.5 5 4" />
     </svg>
   );
 }
